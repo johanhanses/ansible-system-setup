@@ -164,7 +164,7 @@
           alias gs="git status"
           alias gc="git checkout"
           alias gcb="git checkout -b"
-          alias gcm="git cz"
+          alias gcm="git commit -m"
           alias wip="git commit -m \"wip\" --no-verify"
           alias k="kubectl"
           alias t="tmux"
@@ -1048,4 +1048,51 @@
         path: "/home/johanhanses/.config/sway/config"
         regexp: '^\s*bindsym --locked XF86MonBrightnessUp'
         line: '      bindsym --locked XF86MonBrightnessUp exec light -A 5'
+        state: present
+
+    # Add permissions for webcam access on Wayland
+    - name: Create xdg-desktop-portal config directory
+      file:
+        path: "/home/johanhanses/.config/xdg-desktop-portal"
+        state: directory
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0755'
+      become: no
+      become_user: johanhanses
+
+    - name: Configure xdg-desktop-portal for proper webcam access
+      copy:
+        dest: "/home/johanhanses/.config/xdg-desktop-portal/portals.conf"
+        content: |
+          [preferred]
+          default=gtk
+          org.freedesktop.impl.portal.Settings=gtk
+          org.freedesktop.impl.portal.Screenshot=wlr
+          org.freedesktop.impl.portal.ScreenCast=wlr
+          org.freedesktop.impl.portal.RemoteDesktop=wlr
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0644'
+      become: no
+      become_user: johanhanses
+
+    - name: Install xdg desktop portal packages
+      dnf:
+        name:
+          - xdg-desktop-portal
+          - xdg-desktop-portal-wlr
+          - xdg-desktop-portal-gtk
+          - pipewire
+          - wireplumber
+        state: present
+
+    - name: Add Microsoft Edge permissions to Flatpak
+      command: flatpak override --user com.microsoft.Edge --filesystem=xdg-run/pipewire-0
+
+    - name: Add Edge webcam Wayland configuration
+      lineinfile:
+        path: "/home/johanhanses/.config/sway/config"
+        line: "exec dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY SWAYSOCK"
+        insertbefore: "include /etc/sway/config.d/*"
         state: present
