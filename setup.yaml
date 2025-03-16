@@ -1,0 +1,1051 @@
+---
+- name: Fedora 41 Setup
+  hosts: localhost
+  become: yes
+
+  tasks:
+    - name: Ensure DNF is installed
+      command: dnf install -y dnf
+
+    - name: Ensure DNF is up to date
+      command: dnf update -y
+
+    - name: Enable RPM Fusion (free and non-free)
+      command: dnf install -y --nogpgcheck https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-41.noarch.rpm https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-41.noarch.rpm
+
+    - name: Add NodeSource repository for Node.js 22
+      shell: curl -fsSL https://rpm.nodesource.com/setup_22.x | bash
+
+    - name: Add Microsoft GPG key
+      command: rpm --import https://packages.microsoft.com/keys/microsoft.asc
+
+    - name: Add Microsoft VSCode repository
+      shell: echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\nautorefresh=1\ntype=rpm-md\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | tee /etc/yum.repos.d/vscode.repo > /dev/null
+
+    - name: Update package cache
+      command: dnf check-update
+
+    - name: Install VSCode, GNOME Tweaks tools, Zsh, tmux, neovim, eza, bat, and git-delta
+      dnf:
+        name:
+          - code
+          - gnome-tweaks
+          - gnome-extensions-app
+          - zsh
+          - tmux
+          - neovim
+          - eza
+          - bat
+          - git-delta
+        state: present
+
+    - name: Install fzf, ripgrep, and tree
+      dnf:
+        name:
+          - fzf
+          - ripgrep
+          - tree
+        state: present
+
+    - name: Enable Copr repository for Starship
+      command: dnf copr enable atim/starship -y
+
+    - name: Install Starship prompt
+      dnf:
+        name: starship
+        state: present
+
+    - name: Set Zsh as default shell if not already set
+      shell: "grep -q '^johanhanses:.*:/bin/zsh$' /etc/passwd || chsh -s /bin/zsh johanhanses"
+      changed_when: false
+
+    - name: Install SauceCodePro Nerd Font
+      shell: |
+        mkdir -p /usr/share/fonts/nerd-fonts
+        cd /usr/share/fonts/nerd-fonts
+        if [ ! -f "SauceCodePro.zip" ]; then
+          curl -fLo "SauceCodePro.zip" --connect-timeout 10 --retry 3 https://github.com/ryanoasis/nerd-fonts/releases/latest/download/SourceCodePro.zip
+          unzip -o SauceCodePro.zip
+          rm SauceCodePro.zip
+          fc-cache -fv
+        fi
+
+    - name: Install zsh-autosuggestions and zsh-syntax-highlighting on Fedora
+      dnf:
+        name:
+          - zsh-autosuggestions
+          - zsh-syntax-highlighting
+        state: present
+      become: yes
+
+    - name: Configure .zshrc with all settings
+      blockinfile:
+        path: "/home/johanhanses/.zshrc"
+        block: |
+          # ZSH plugins
+          source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+          source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+          # Environment Variables
+          export EDITOR="nvim"
+          export VISUAL="nvim"
+          export XDG_CONFIG_HOME="$HOME/.config"
+          export REPOS="$HOME/Repos"
+          export GITUSER="johanhanses"
+          export GHREPOS="$HOME/Repos/github.com/johanhanses"
+          export DOTFILES="$GHREPOS/dotfiles"
+          export SCRIPTS="$DOTFILES/scripts"
+          export SECOND_BRAIN="$GHREPOS/zettelkasten"
+          export WORK_DIR="$REPOS/github.com/Digital-Tvilling"
+          export LKAB_DIR="$WORK_DIR/.lkab"
+          export ONPREM_CONFIG_DIR="$LKAB_DIR/on-prem/config"
+          export ONPREM_CERT_DIR="$LKAB_DIR/on-prem/cert"
+          export PATH="$XDG_CONFIG_HOME/scripts:$PATH:/home/johanhanses/.local/bin"
+
+          # fzf configuration
+          # Set up fzf key bindings and fuzzy completion
+          source <(fzf --zsh)
+
+          # fzf default options
+          export FZF_DEFAULT_COMMAND="rg --files"
+          export FZF_DEFAULT_OPTS="--height 90% --border"
+
+          # fzf CTRL-T configuration
+          export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+          export FZF_CTRL_T_OPTS="--preview 'bat -n --color=always {}' --bind 'ctrl-/:change-preview-window(down|hidden|)'"
+
+          # fzf ALT-C configuration
+          export FZF_ALT_C_OPTS="--preview 'tree -C {} | head -200'"
+
+          # fzf tmux configuration
+          export FZF_TMUX=1
+          export FZF_TMUX_OPTS=""
+
+          # Aliases
+          alias repos="cd $REPOS"
+          alias ghrepos="cd $GHREPOS"
+          alias dot="cd $GHREPOS/dotfiles"
+          alias scripts="cd $DOTFILES/scripts"
+          alias rwdot="cd $REPOS/github.com/rwxrob/dot"
+          alias rob="cd $REPOS/github.com/rwxrob"
+          alias dt="cd $REPOS/github.com/Digital-Tvilling"
+          alias plan="cd $REPOS/github.com/Digital-Tvilling/DT-Frontend-planning"
+          alias rtm="cd $REPOS/github.com/Digital-Tvilling/dt-frontend-vite"
+          alias deploy="cd $REPOS/github.com/Digital-Tvilling/deployment-configuration"
+          alias backend="cd $REPOS/github.com/Digital-Tvilling/deployment-configuration/external/localhost"
+          alias dti="cd $REPOS/github.com/Digital-Tvilling/dti"
+          alias home="cd $REPOS/github.com/johanhanses/johanhanses.com/"
+          alias sb="cd $SECOND_BRAIN"
+          alias config="cd $XDG_CONFIG_HOME"
+          alias sysfig="cd $HOME/ansible-system-setup"
+          alias windows="cd /mnt/c/Users/johanhanses"
+          alias cat="bat"
+          alias fast="fast -u --single-line"
+          alias speed="curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 -"
+          alias htop="btm -b"
+          alias neofetch="fastfetch"
+          alias photos="npx --yes icloudpd --directory ~/icloud-photos --username johanhanses@gmail.com --watch-with-interval 3600"
+          alias nv="nvim"
+          alias c="clear"
+          alias n="npm"
+          alias nr="npm run"
+          alias ns="npm start"
+          alias ls="ls --color=auto"
+          alias ll="eza -l -a -a -g --group-directories-first --show-symlinks --icons=always"
+          alias l="eza -l -g --group-directories-first --show-symlinks --icons=always"
+          alias la="ls -lathr"
+          alias lg="lazygit"
+          alias tree="eza --tree"
+          alias e="exit"
+          alias gm="git checkout main && git pull"
+          alias gd="git diff"
+          alias gp="git push"
+          alias ga="git add ."
+          alias gs="git status"
+          alias gc="git checkout"
+          alias gcb="git checkout -b"
+          alias gcm="git cz"
+          alias wip="git commit -m \"wip\" --no-verify"
+          alias k="kubectl"
+          alias t="tmux"
+          alias tk="tmux kill-server"
+          alias tl="tmux ls"
+          alias ta="tmux a"
+          alias z="zellij"
+          alias d="docker"
+          alias dc="docker compose"
+
+          # Initialize Starship prompt
+          eval "$(starship init zsh)"
+        create: yes
+        owner: "johanhanses"
+        group: "johanhanses"
+
+    - name: Configure global Git settings
+      copy:
+        dest: "/home/johanhanses/.gitconfig"
+        content: |
+          [user]
+            name = Johan Hanses
+            email = johanhanses@gmail.com
+          [init]
+            defaultBranch = main
+          [pull]
+            rebase = false
+          [push]
+            autoSetupRemote = true
+            default = current
+          [merge]
+            conflictstyle = diff3
+          [diff]
+            colorMoved = default
+          [delta]
+            line-numbers = true
+            navigate = true
+        owner: "johanhanses"
+        group: "johanhanses"
+
+    - name: Configure global Git ignore
+      copy:
+        dest: "/home/johanhanses/.gitignore_global"
+        content: |
+          .DS_Store
+          .AppleDouble
+          .LSOverride
+          Icon
+          ._*
+          .Spotlight-V100
+          .Trashes
+          tags
+          vendor-tags
+          .ssh
+          .lvimrc
+          .rgignore
+          .vscode/
+          .idea/
+          .fleet/
+        owner: "johanhanses"
+        group: "johanhanses"
+
+    - name: Set Git to use global ignore file
+      command: git config --global core.excludesfile ~/.gitignore_global
+
+    - name: Install additional utility packages
+      dnf:
+        name:
+          - fastfetch
+          - tailscale
+          - gcc
+          - kubectl
+          - shellcheck
+          - zip
+          - xz
+          - unzip
+          - p7zip
+          - ripgrep
+          - fzf
+          - file
+          - which
+          - tree
+          - gawk
+          - zstd
+          - gnupg
+          - btop
+          - iotop
+          - iftop
+          - cmatrix
+        state: present
+
+    - name: Ensure tmux config directory exists
+      file:
+        path: "/home/johanhanses/.config/tmux"
+        state: directory
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0755'
+
+    - name: Configure tmux
+      copy:
+        dest: "/home/johanhanses/.config/tmux/tmux.conf"
+        content: |
+          setw -g mode-keys vi
+
+          set -g history-limit 10000
+
+          set -g base-index 1
+          setw -g pane-base-index 1
+
+          set-option -g automatic-rename on
+          set-option -g automatic-rename-format '#{b:pane_current_path}'
+
+          set -g renumber-windows on
+
+          set -g default-terminal 'screen-256color'
+          set -sa terminal-features ',xterm-256color:RGB'
+
+          set -g mouse on
+
+          set -g set-titles on
+
+          setw -g monitor-activity on
+
+          set -g bell-action any
+
+          set -g visual-bell off
+          set -g visual-activity off
+
+          set -g focus-events on
+
+          setw -g aggressive-resize on
+
+          set -g detach-on-destroy off
+
+          set -s escape-time 0
+
+          set-option -g default-shell /bin/zsh
+
+          set -g prefix C-a
+
+          unbind r
+          bind r source-file ~/.config/tmux/tmux.conf\; display-message '~/.tmux.conf reloaded'
+
+          bind C-p previous-window
+          bind C-n next-window
+
+          bind -r h select-pane -L
+          bind -r j select-pane -D
+          bind -r k select-pane -U
+          bind -r l select-pane -R
+          bind -r C-h select-window -t :-
+          bind -r C-l select-window -t :+
+
+          is_vim='echo "#{pane_current_command}" | grep -iqE "(^|\/)g?(view|n?vim?)(diff)?$"'
+          bind -n C-h if-shell "$is_vim" "send-keys C-h" "select-pane -L"
+          bind -n C-j if-shell "$is_vim" "send-keys C-j" "select-pane -D"
+          bind -n C-k if-shell "$is_vim" "send-keys C-k" "select-pane -U"
+          bind -n C-l if-shell "$is_vim" "send-keys C-l" "select-pane -R"
+
+          bind -r n next-window
+          bind -r p previous-window
+
+          bind | split-window -h -c "#{pane_current_path}"
+          bind - split-window -v -c "#{pane_current_path}"
+
+          bind c new-window -c "#{pane_current_path}"
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0644'
+
+    - name: Install newsboat RSS reader
+      dnf:
+        name: newsboat
+        state: present
+
+    - name: Ensure newsboat config directory exists
+      file:
+        path: "/home/johanhanses/.config/newsboat"
+        state: directory
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0755'
+
+    - name: Configure newsboat URLs
+      copy:
+        dest: "/home/johanhanses/.config/newsboat/urls"
+        content: |
+          https://nixos.org/blog/announcements-rss.xml
+          https://jnsgr.uk/posts/index.xml
+          https://notado.app/rss/jado/mental-health/feed.rss
+          https://www.dn.se/rss/
+          https://nrd.sh/atom.xml
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0644'
+
+    - name: Configure newsboat settings
+      copy:
+        dest: "/home/johanhanses/.config/newsboat/config"
+        content: |
+          # Maximum items to keep per feed
+          max-items 500
+
+          # Basic display settings
+          show-read-feeds yes
+          feed-sort-order unreadarticlecount-asc
+
+          # Colors and formatting
+          color background default default
+          color listnormal default default
+          color listfocus black yellow
+          color listnormal_unread default default bold
+          color listfocus_unread black yellow bold
+          color info black blue bold
+          color article default default
+
+          # Key bindings
+          bind-key j down
+          bind-key k up
+          bind-key J next-feed
+          bind-key K prev-feed
+          bind-key G end
+          bind-key g home
+          bind-key l open
+          bind-key h quit
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0644'
+
+    - name: Install Flatpak
+      dnf:
+        name: flatpak
+        state: present
+
+    - name: Add Flathub repository
+      command: flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+    - name: Install applications via Flatpak
+      command: flatpak install -y flathub {{ item }}
+      loop:
+        - com.mattermost.Desktop
+        - md.obsidian.Obsidian
+        - org.mozilla.Thunderbird
+        - com.microsoft.Edge
+        - com.spotify.Client
+      register: flatpak_result
+      changed_when: "'is already installed' not in flatpak_result.stderr"
+      failed_when:
+        - flatpak_result.rc != 0
+        - "'is already installed' not in flatpak_result.stderr"
+
+    # Add LibreWolf repository and install the browser
+    - name: Add LibreWolf repository
+      shell: curl -fsSL https://repo.librewolf.net/librewolf.repo > /etc/yum.repos.d/librewolf.repo
+      args:
+        creates: /etc/yum.repos.d/librewolf.repo
+      ignore_errors: yes
+
+    - name: Install LibreWolf browser (try DNF)
+      dnf:
+        name: librewolf
+        state: present
+      register: librewolf_dnf_result
+      ignore_errors: yes
+
+    - name: Install LibreWolf via Flatpak (if DNF fails)
+      command: flatpak install -y flathub io.gitlab.librewolf-community
+      register: flatpak_librewolf_result
+      changed_when: "'is already installed' not in flatpak_librewolf_result.stderr"
+      failed_when:
+        - flatpak_librewolf_result.rc != 0
+        - "'is already installed' not in flatpak_librewolf_result.stderr"
+      when: librewolf_dnf_result is failed
+
+    # Install Sway window manager
+    - name: Install Sway and required packages
+      dnf:
+        name:
+          - sway
+          - swaylock
+          - swayidle
+          - wl-clipboard
+          - mako
+          - wofi
+          - light
+          - grim
+          - slurp
+        state: present
+
+    - name: Add video group for light (brightness control)
+      user:
+        name: johanhanses
+        groups: video
+        append: yes
+
+    - name: Ensure Sway config directory exists
+      file:
+        path: "/home/johanhanses/.config/sway"
+        state: directory
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0755'
+
+    - name: Create minimal Sway config override
+      copy:
+        dest: "/home/johanhanses/.config/sway/config"
+        content: |
+          # Default config for sway
+          #
+          # Copy this to ~/.config/sway/config and edit it to your liking.
+          #
+          # Read `man 5 sway` for a complete reference.
+
+          ### Variables
+          #
+          # Logo key. Use Mod1 for Alt.
+          set $mod Mod4
+          # Home row direction keys, like vim
+          set $left h
+          set $down j
+          set $up k
+          set $right l
+          # Your preferred terminal emulator
+          set $term ptyxis
+          # Your preferred application launcher
+          set $menu wofi --show drun
+
+          ### Output configuration
+          #
+          # Default wallpaper (more resolutions are available in /usr/share/backgrounds/sway/)
+          output * bg /home/johanhanses/Pictures/wallpapers/jokulsarlon.png fill
+          #
+          # Example configuration:
+          #
+          #   output HDMI-A-1 resolution 1920x1080 position 1920,0
+          #
+          # You can get the names of your outputs by running: swaymsg -t get_outputs
+
+          ### Idle configuration
+          #
+          # Example configuration:
+          #
+          # exec swayidle -w \
+          #          timeout 300 'swaylock -f -c 000000' \
+          #          timeout 600 'swaymsg "output * power off"' resume 'swaymsg "output * power on"' \
+          #          before-sleep 'swaylock -f -c 000000'
+          #
+          # This will lock your screen after 300 seconds of inactivity, then turn off
+          # your displays after another 300 seconds, and turn your screens back on when
+          # resumed. It will also lock your screen before your computer goes to sleep.
+
+          ### Input configuration
+          #
+          # Example configuration:
+          #
+          #   input "2:14:SynPS/2_Synaptics_TouchPad" {
+          #       dwt enabled
+          #       tap enabled
+          #       natural_scroll enabled
+          #       middle_emulation enabled
+          #   }
+          #
+          # You can get the names of your inputs by running: swaymsg -t get_inputs
+          # Read `man 5 sway-input` for more information about this section.
+
+          ### Key bindings
+          #
+          # Basics:
+          #
+              # Start a terminal
+              bindsym $mod+Return exec $term
+
+              # Kill focused window
+              bindsym $mod+Shift+q kill
+
+              # Start your launcher
+              bindsym $mod+d exec $menu
+
+              # Drag floating windows by holding down $mod and left mouse button.
+              # Resize them with right mouse button + $mod.
+              # Despite the name, also works for non-floating windows.
+              # Change normal to inverse to use left mouse button for resizing and right
+              # mouse button for dragging.
+              floating_modifier $mod normal
+
+              # Reload the configuration file
+              bindsym $mod+Shift+c reload
+
+              # Exit sway (logs you out of your Wayland session)
+              bindsym $mod+Shift+e exec swaynag -t warning -m 'You pressed the exit shortcut. Do you really want to exit sway? This will end your Wayland session.' -B 'Yes, exit sway' 'swaymsg exit'
+          #
+          # Moving around:
+          #
+              # Move your focus around
+              bindsym $mod+$left focus left
+              bindsym $mod+$down focus down
+              bindsym $mod+$up focus up
+              bindsym $mod+$right focus right
+              # Or use $mod+[up|down|left|right]
+              bindsym $mod+Left focus left
+              bindsym $mod+Down focus down
+              bindsym $mod+Up focus up
+              bindsym $mod+Right focus right
+
+              # Move the focused window with the same, but add Shift
+              bindsym $mod+Shift+$left move left
+              bindsym $mod+Shift+$down move down
+              bindsym $mod+Shift+$up move up
+              bindsym $mod+Shift+$right move right
+              # Ditto, with arrow keys
+              bindsym $mod+Shift+Left move left
+              bindsym $mod+Shift+Down move down
+              bindsym $mod+Shift+Up move up
+              bindsym $mod+Shift+Right move right
+          #
+          # Workspaces:
+          #
+              # Switch to workspace
+              bindsym $mod+1 workspace number 1
+              bindsym $mod+2 workspace number 2
+              bindsym $mod+3 workspace number 3
+              bindsym $mod+4 workspace number 4
+              bindsym $mod+5 workspace number 5
+              bindsym $mod+6 workspace number 6
+              bindsym $mod+7 workspace number 7
+              bindsym $mod+8 workspace number 8
+              bindsym $mod+9 workspace number 9
+              bindsym $mod+0 workspace number 10
+              # Move focused container to workspace
+              bindsym $mod+Shift+1 move container to workspace number 1
+              bindsym $mod+Shift+2 move container to workspace number 2
+              bindsym $mod+Shift+3 move container to workspace number 3
+              bindsym $mod+Shift+4 move container to workspace number 4
+              bindsym $mod+Shift+5 move container to workspace number 5
+              bindsym $mod+Shift+6 move container to workspace number 6
+              bindsym $mod+Shift+7 move container to workspace number 7
+              bindsym $mod+Shift+8 move container to workspace number 8
+              bindsym $mod+Shift+9 move container to workspace number 9
+              bindsym $mod+Shift+0 move container to workspace number 10
+              # Note: workspaces can have any name you want, not just numbers.
+              # We just use 1-10 as the default.
+          #
+          # Layout stuff:
+          #
+              # You can "split" the current object of your focus with
+              # $mod+b or $mod+v, for horizontal and vertical splits
+              # respectively.
+              bindsym $mod+b splith
+              bindsym $mod+v splitv
+
+              # Switch the current container between different layout styles
+              bindsym $mod+s layout stacking
+              bindsym $mod+w layout tabbed
+              bindsym $mod+e layout toggle split
+
+              # Make the current focus fullscreen
+              bindsym $mod+f fullscreen
+
+              # Toggle the current focus between tiling and floating mode
+              bindsym $mod+Shift+space floating toggle
+
+              # Swap focus between the tiling area and the floating area
+              bindsym $mod+space focus mode_toggle
+
+              # Move focus to the parent container
+              bindsym $mod+a focus parent
+          #
+          # Scratchpad:
+          #
+              # Sway has a "scratchpad", which is a bag of holding for windows.
+              # You can send windows there and get them back later.
+
+              # Move the currently focused window to the scratchpad
+              bindsym $mod+Shift+minus move scratchpad
+
+              # Show the next scratchpad window or hide the focused scratchpad window.
+              # If there are multiple scratchpad windows, this command cycles through them.
+              bindsym $mod+minus scratchpad show
+          #
+          # Resizing containers:
+          #
+          mode "resize" {
+              # left will shrink the containers width
+              # right will grow the containers width
+              # up will shrink the containers height
+              # down will grow the containers height
+              bindsym $left resize shrink width 10px
+              bindsym $down resize grow height 10px
+              bindsym $up resize shrink height 10px
+              bindsym $right resize grow width 10px
+
+              # Ditto, with arrow keys
+              bindsym Left resize shrink width 10px
+              bindsym Down resize grow height 10px
+              bindsym Up resize shrink height 10px
+              bindsym Right resize grow width 10px
+
+              # Return to default mode
+              bindsym Return mode "default"
+              bindsym Escape mode "default"
+          }
+          bindsym $mod+r mode "resize"
+
+          #
+          # Utilities:
+          #
+              # Special keys to adjust volume via PulseAudio
+              bindsym --locked XF86AudioMute exec pactl set-sink-mute \@DEFAULT_SINK@ toggle
+              bindsym --locked XF86AudioLowerVolume exec pactl set-sink-volume \@DEFAULT_SINK@ -5%
+              bindsym --locked XF86AudioRaiseVolume exec pactl set-sink-volume \@DEFAULT_SINK@ +5%
+              bindsym --locked XF86AudioMicMute exec pactl set-source-mute \@DEFAULT_SOURCE@ toggle
+
+              # Special keys to adjust brightness via brightnessctl
+              bindsym --locked XF86MonBrightnessDown exec brightnessctl set 5%-
+              bindsym --locked XF86MonBrightnessUp exec brightnessctl set 5%+
+
+              # Special key to take a screenshot with grim
+              bindsym Print exec grim
+
+              bindsym $mod+Escape exec swaylock -f -c 000000
+
+          #
+          # Status Bar:
+          #
+          # Read `man 5 sway-bar` for more information about this section.
+          bar {
+              swaybar_command waybar
+          }
+
+          # Trackpad configuration
+          input "1133:45111:MX_Anywhere_3S_Mouse" {
+              natural_scroll enabled
+          }
+
+          # Set Nordic keyboard layout
+          input "type:keyboard" {
+              xkb_layout se
+              xkb_options ctrl:nocaps
+          }
+
+          # Trackpad configuration
+          input "type:touchpad" {
+              tap enabled
+              natural_scroll enabled
+              dwt enabled
+              middle_emulation enabled
+          }
+
+          # Window appearance
+          default_border pixel 6
+          gaps inner 24
+          gaps outer 24
+          smart_gaps off
+
+          # Clamshell mode (use external monitor when laptop lid closed)
+          bindswitch --reload --locked lid:on output eDP-1 disable
+          bindswitch --reload --locked lid:off output eDP-1 enable
+
+          include /etc/sway/config.d/*
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0644'
+
+    # Install PyWal for dynamic colorscheme generation
+    - name: Install PyWal dependencies
+      dnf:
+        name:
+          - python3-pip
+          - ImageMagick
+        state: present
+
+    - name: Install PyWal via pip
+      pip:
+        name: pywal
+        extra_args: --user
+      become: no
+      become_user: johanhanses
+
+    - name: Create Sway scripts directory
+      file:
+        path: "/home/johanhanses/.config/sway/scripts"
+        state: directory
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0755'
+
+    - name: Create PyWal script for Sway
+      copy:
+        dest: "/home/johanhanses/.config/sway/scripts/pywal.sh"
+        content: |
+          #!/bin/bash
+          # Generate colorscheme from wallpaper
+          wal -i /home/johanhanses/Pictures/wallpapers/jokulsarlon.png
+
+          # Parse the colors
+          source "$HOME/.cache/wal/colors.sh"
+
+          # Set sway colors
+          swaymsg "client.focused $color0 $color1 $foreground $color3 $color1"
+          swaymsg "client.focused_inactive $color0 $color2 $color7 $background $color2"
+          swaymsg "client.unfocused $color0 $background $foreground $background $background"
+          swaymsg "client.urgent $color0 $color3 $foreground $color3 $color3"
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0755'
+
+    - name: Add PyWal autostart to Sway config
+      lineinfile:
+        path: "/home/johanhanses/.config/sway/config"
+        line: "exec_always $HOME/.config/sway/scripts/pywal.sh"
+        insertbefore: "include /etc/sway/config.d/*"
+        state: present
+
+    - name: Create wallpapers directory
+      file:
+        path: "/home/johanhanses/Pictures/wallpapers"
+        state: directory
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0755'
+
+    - name: Ensure Flatpak environment variables are set in Sway
+      blockinfile:
+        path: "/home/johanhanses/.config/sway/config"
+        block: |
+          # Flatpak integration with Sway/Wayland
+          exec systemctl --user import-environment DISPLAY WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP
+          exec dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP=sway
+
+          # Environment variables for proper Wayland/Flatpak support
+          exec export MOZ_ENABLE_WAYLAND=1
+          exec export XDG_SESSION_TYPE=wayland
+          exec export GDK_BACKEND=wayland
+          exec export QT_QPA_PLATFORM=wayland
+          exec export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+        insertbefore: "include /etc/sway/config.d/*"
+
+    # Install 1Password using direct RPM method (more reliable)
+    - name: Download 1Password RPM
+      get_url:
+        url: https://downloads.1password.com/linux/rpm/stable/x86_64/1password-latest.rpm
+        dest: /tmp/1password-latest.rpm
+        mode: '0644'
+
+    - name: Install 1Password from RPM
+      dnf:
+        name: /tmp/1password-latest.rpm
+        state: present
+        disable_gpg_check: yes  # Skip GPG check if needed
+
+    # Add brightness control configuration
+    - name: Create udev rules directory if needed
+      file:
+        path: "/etc/udev/rules.d"
+        state: directory
+        mode: '0755'
+
+    - name: Add udev rule for brightness control
+      copy:
+        dest: "/etc/udev/rules.d/90-backlight.rules"
+        content: |
+          # Allow users in the video group to change brightness
+          ACTION=="add", SUBSYSTEM=="backlight", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness"
+          ACTION=="add", SUBSYSTEM=="backlight", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
+          ACTION=="add", SUBSYSTEM=="leds", RUN+="/bin/chgrp video /sys/class/leds/%k/brightness"
+          ACTION=="add", SUBSYSTEM=="leds", RUN+="/bin/chmod g+w /sys/class/leds/%k/brightness"
+        mode: '0644'
+
+    - name: Reload udev rules
+      shell: udevadm control --reload-rules && udevadm trigger
+      args:
+        executable: /bin/bash
+
+    - name: Install light as alternative brightness controller
+      dnf:
+        name: light
+        state: present
+
+    # Install Waybar for a better status bar in Sway
+    - name: Install Waybar from Fedora repositories
+      dnf:
+        name: waybar
+        state: present
+
+    - name: Create Waybar config directory
+      file:
+        path: "/home/johanhanses/.config/waybar"
+        state: directory
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0755'
+
+    - name: Configure Waybar
+      copy:
+        dest: "/home/johanhanses/.config/waybar/config"
+        content: |
+          {
+              "layer": "top",
+              "position": "top",
+              "height": 30,
+              "modules-left": ["sway/workspaces", "sway/mode"],
+              "modules-center": ["sway/window"],
+              "modules-right": ["network", "pulseaudio", "battery", "clock", "tray"],
+              "sway/workspaces": {
+                  "disable-scroll": true,
+                  "all-outputs": true,
+                  "format": "{name}: {icon}",
+                  "format-icons": {
+                      "1": "",
+                      "2": "",
+                      "3": "",
+                      "4": "",
+                      "5": "",
+                      "urgent": "",
+                      "focused": "",
+                      "default": ""
+                  }
+              },
+              "sway/mode": {
+                  "format": "<span style=\"italic\">{}</span>"
+              },
+              "tray": {
+                  "spacing": 10
+              },
+              "clock": {
+                  "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>",
+                  "format": "{:%Y-%m-%d %H:%M}"
+              },
+              "battery": {
+                  "states": {
+                      "good": 95,
+                      "warning": 30,
+                      "critical": 15
+                  },
+                  "format": "{capacity}% {icon}",
+                  "format-charging": "{capacity}% ",
+                  "format-plugged": "{capacity}% ",
+                  "format-alt": "{time} {icon}",
+                  "format-icons": ["", "", "", "", ""]
+              },
+              "network": {
+                  "format-wifi": "{essid} ({signalStrength}%) ",
+                  "format-ethernet": "{ipaddr}/{cidr} ",
+                  "tooltip-format": "{ifname} via {gwaddr} ",
+                  "format-linked": "{ifname} (No IP) ",
+                  "format-disconnected": "Disconnected ⚠",
+                  "format-alt": "{ifname}: {ipaddr}/{cidr}"
+              },
+              "pulseaudio": {
+                  "format": "{volume}% {icon} {format_source}",
+                  "format-bluetooth": "{volume}% {icon} {format_source}",
+                  "format-bluetooth-muted": " {icon} {format_source}",
+                  "format-muted": " {format_source}",
+                  "format-source": "{volume}% ",
+                  "format-source-muted": "",
+                  "format-icons": {
+                      "headphone": "",
+                      "hands-free": "",
+                      "headset": "",
+                      "phone": "",
+                      "portable": "",
+                      "car": "",
+                      "default": ["", "", ""]
+                  },
+                  "on-click": "pavucontrol"
+              }
+          }
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0644'
+
+    - name: Create Waybar style file
+      copy:
+        dest: "/home/johanhanses/.config/waybar/style.css"
+        content: |
+          * {
+              border: none;
+              border-radius: 0;
+              font-family: "SauceCodePro Nerd Font", monospace;
+              font-size: 14px;
+              min-height: 0;
+          }
+
+          window#waybar {
+              background-color: rgba(43, 48, 59, 0.9);
+              border-bottom: 3px solid rgba(100, 114, 125, 0.5);
+              color: #ffffff;
+              transition-property: background-color;
+              transition-duration: .5s;
+          }
+
+          window#waybar.hidden {
+              opacity: 0.2;
+          }
+
+          #workspaces button {
+              padding: 0 5px;
+              background-color: transparent;
+              color: #ffffff;
+              border-bottom: 3px solid transparent;
+          }
+
+          #workspaces button:hover {
+              background: rgba(0, 0, 0, 0.2);
+              box-shadow: inherit;
+              border-bottom: 3px solid #ffffff;
+          }
+
+          #workspaces button.focused {
+              background-color: #64727D;
+              border-bottom: 3px solid #ffffff;
+          }
+
+          #workspaces button.urgent {
+              background-color: #eb4d4b;
+          }
+
+          #mode {
+              background-color: #64727D;
+              border-bottom: 3px solid #ffffff;
+          }
+
+          #clock,
+          #battery,
+          #cpu,
+          #memory,
+          #temperature,
+          #backlight,
+          #network,
+          #pulseaudio,
+          #custom-media,
+          #tray,
+          #mode,
+          #idle_inhibitor,
+          #mpd {
+              padding: 0 10px;
+              margin: 0 4px;
+              color: #ffffff;
+          }
+
+          #battery.charging {
+              color: #ffffff;
+              background-color: #26A65B;
+          }
+
+          @keyframes blink {
+              to {
+                  background-color: #ffffff;
+                  color: #000000;
+              }
+          }
+
+          #battery.critical:not(.charging) {
+              background-color: #f53c3c;
+              color: #ffffff;
+              animation-name: blink;
+              animation-duration: 0.5s;
+              animation-timing-function: linear;
+              animation-iteration-count: infinite;
+              animation-direction: alternate;
+          }
+
+          label:focus {
+              background-color: #000000;
+          }
+        owner: "johanhanses"
+        group: "johanhanses"
+        mode: '0644'
+
+    # Update brightness control keybindings (replace existing ones)
+    - name: Update brightness keybindings in Sway config
+      lineinfile:
+        path: "/home/johanhanses/.config/sway/config"
+        regexp: '^\s*bindsym --locked XF86MonBrightnessDown'
+        line: '      bindsym --locked XF86MonBrightnessDown exec light -U 5'
+        state: present
+
+    - name: Update brightness up keybinding in Sway config
+      lineinfile:
+        path: "/home/johanhanses/.config/sway/config"
+        regexp: '^\s*bindsym --locked XF86MonBrightnessUp'
+        line: '      bindsym --locked XF86MonBrightnessUp exec light -A 5'
+        state: present
